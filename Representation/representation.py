@@ -1,7 +1,7 @@
 import hyperon
 
 # from ..reduct.enf.main import reduce
-from helpers import *
+from Representation.helpers import *
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
