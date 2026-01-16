@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import List, Any, Callable
 from copy import deepcopy
 import random
+import re
 
 class Factor:
     """
@@ -256,6 +257,247 @@ def build_factor_graph_from_deme(deme: Deme) -> FactorGraph:
                 )
 
     return FactorGraph(variables=variables, factors=factors)
+
+class FitnessOracle:
+    def __init__(self, target_knob_name: str = "O"):
+        self.target_knob_name = target_knob_name
+        self.memo: dict[str, float] = {}
+
+    def get_fitness(self, instance: "Instance") -> float:
+        """
+        Evaluates the fitness of an individual based on the truth table data
+        present in the instance's knobs. Utilizes caching to avoid re-evaluation.
+        """
+        # Check cache (using the program string as key)
+        if instance.value in self.memo:
+            print('Used From Cache CCCCCCC')
+            instance.score = self.memo[instance.value]
+            return instance.score
+        
+        
+        inputs: dict[str, List[bool]] = {}
+        target_vals: List[bool] = []
+        
+        # Populate inputs and find target
+        row_count = 0
+        for knob in instance.knobs:
+            if knob.Value:
+                row_count = len(knob.Value)
+            
+            if knob.symbol == self.target_knob_name:
+                target_vals = knob.Value
+            else:
+                inputs[knob.symbol] = knob.Value
+        
+        # If target not found or no data, return 0.0 (or handle error)
+        if not target_vals or row_count == 0:
+            return 0.0
+        
+        try:
+            predicted_vals = self._evaluate_expression(instance.value, inputs, row_count)
+        except Exception as e:
+            # Fallback for malformed expressions or eval errors
+            print(f"Evaluation error for {instance.value}: {e}")
+            predicted_vals = [False] * row_count
+
+        # Count how many predictions match the target and Compute accuracy
+        matches = sum(1 for p, t in zip(predicted_vals, target_vals) if p == t)
+        accuracy = matches / row_count if row_count > 0 else 0.0
+        
+        self.memo[instance.value] = accuracy
+        instance.score = accuracy
+        return accuracy
+
+    def _evaluate_expression(self, expr_str: str, inputs: dict[str, List[bool]], row_count: int) -> List[bool]:
+        """
+        Parses and evaluates the S boolean expression (AND/OR/NOT).
+        """
+        # Simple tokenizer: split by parens and spaces
+        tokens = re.findall(r'\(|\)|[^\s()]+', expr_str)
+    
+        token_list = tokens
+        self._idx = 0
+        
+        def next_token():
+            if self._idx < len(token_list):
+                t = token_list[self._idx]
+                self._idx += 1
+                return t
+            return None
+            
+        def peek_token():
+            if self._idx < len(token_list):
+                return token_list[self._idx]
+            return None
+
+        def eval_node() -> List[bool]:
+            t = next_token()
+            if t == '(':
+                # Expect operator or list
+                op = next_token()
+                args_vals = []
+                while peek_token() != ')':
+                    args_vals.append(eval_node())
+                next_token() # consume ')'
+                
+                if op == 'AND':
+                    if not args_vals: return [True] * row_count
+                    # Element-wise AND
+                    res = args_vals[0][:]
+                    for other in args_vals[1:]:
+                        for i in range(row_count):
+                            res[i] = res[i] and other[i]
+                    return res
+                elif op == 'OR':
+                    if not args_vals: return [False] * row_count
+                    res = args_vals[0][:]
+                    for other in args_vals[1:]:
+                        for i in range(row_count):
+                            res[i] = res[i] or other[i]
+                    return res
+                elif op == 'NOT':
+                    if not args_vals: return [False] * row_count
+                    # Unary usually, but logic allows arity 1
+                    return [not x for x in args_vals[0]]
+                else:
+                    # Unknown operator or maybe this list is data?
+                    # Assuming operators are uppercase symbols
+                    return [False] * row_count
+            elif t == ')':
+                # Should be handled by loop
+                return [False] * row_count
+            else:
+                # Atom (Variable or Literal)
+                if t in inputs:
+                    return inputs[t]
+                elif t == 'True': return [True] * row_count
+                elif t == 'False': return [False] * row_count
+                # Handle holes $ as False or arbitrary?
+                return [False] * row_count
+
+        return eval_node()
+class FitnessOracle:
+    def __init__(self, target_knob_name: str = "O"):
+        self.target_knob_name = target_knob_name
+        self.memo: dict[str, float] = {}
+
+    def get_fitness(self, instance: "Instance") -> float:
+        """
+        Evaluates the fitness of an individual based on the truth table data
+        present in the instance's knobs. Utilizes caching to avoid re-evaluation.
+        """
+        # Check cache (using the program string as key)
+        if instance.value in self.memo:
+            instance.score = self.memo[instance.value]
+            return instance.score
+        
+        # Identify target knob and inputs
+        inputs: dict[str, List[bool]] = {}
+        target_vals: List[bool] = []
+        
+        # Populate inputs and find target
+        row_count = 0
+        for knob in instance.knobs:
+            if knob.Value:
+                row_count = len(knob.Value)
+            
+            if knob.symbol == self.target_knob_name:
+                target_vals = knob.Value
+            else:
+                inputs[knob.symbol] = knob.Value
+        
+        # If target not found or no data, return 0.0 (or handle error)
+        if not target_vals or row_count == 0:
+            return 0.0
+
+        # Evaluate the expression
+        try:
+            predicted_vals = self._evaluate_expression(instance.value, inputs, row_count)
+        except Exception as e:
+            # Fallback for malformed expressions or eval errors
+            print(f"Evaluation error for {instance.value}: {e}")
+            predicted_vals = [False] * row_count
+
+        # Compute accuracy
+        # Count how many predictions match the target
+        matches = sum(1 for p, t in zip(predicted_vals, target_vals) if p == t)
+        accuracy = matches / row_count if row_count > 0 else 0.0
+        
+        # Cache and set score
+        self.memo[instance.value] = accuracy
+        instance.score = accuracy
+        return accuracy
+
+    def _evaluate_expression(self, expr_str: str, inputs: dict[str, List[bool]], row_count: int) -> List[bool]:
+        """
+        Parses and evaluates a Lisp-like boolean expression (AND/OR/NOT).
+        """
+        # Simple tokenizer: split by parens and spaces
+        tokens = re.findall(r'\(|\)|[^\s()]+', expr_str)
+        
+        # Use a list stack approach or convert tokens to list and index
+        token_list = tokens
+        self._idx = 0
+        
+        def next_token():
+            if self._idx < len(token_list):
+                t = token_list[self._idx]
+                self._idx += 1
+                return t
+            return None
+            
+        def peek_token():
+            if self._idx < len(token_list):
+                return token_list[self._idx]
+            return None
+
+        def eval_node() -> List[bool]:
+            t = next_token()
+            if t == '(':
+                # Expect operator or list
+                op = next_token()
+                args_vals = []
+                while peek_token() != ')':
+                    args_vals.append(eval_node())
+                next_token() # consume ')'
+                
+                if op == 'AND':
+                    if not args_vals: return [True] * row_count
+                    # Element-wise AND
+                    res = args_vals[0][:]
+                    for other in args_vals[1:]:
+                        for i in range(row_count):
+                            res[i] = res[i] and other[i]
+                    return res
+                elif op == 'OR':
+                    if not args_vals: return [False] * row_count
+                    res = args_vals[0][:]
+                    for other in args_vals[1:]:
+                        for i in range(row_count):
+                            res[i] = res[i] or other[i]
+                    return res
+                elif op == 'NOT':
+                    if not args_vals: return [False] * row_count
+                    # Unary usually, but logic allows arity 1
+                    return [not x for x in args_vals[0]]
+                else:
+                    # Unknown operator or maybe this list is data?
+                    # Assuming operators are uppercase symbols
+                    return [False] * row_count
+            elif t == ')':
+                # Should be handled by loop
+                return [False] * row_count
+            else:
+                # Atom (Variable or Literal)
+                if t in inputs:
+                    return inputs[t]
+                elif t == 'True': return [True] * row_count
+                elif t == 'False': return [False] * row_count
+                # Handle holes $ as False or arbitrary?
+                return [False] * row_count
+
+        return eval_node()
+
 # -> program sketch of this structrure is possible: 
 # (AND $ $)
 # -> their can be any number of $/knobs in the sketch.
