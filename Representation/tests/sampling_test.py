@@ -1,7 +1,8 @@
 import unittest
 import random
 from copy import deepcopy
-from Representation.sampling import randomUniform, randomBernoulli, sample_new_instances
+from Representation.sampling import (randomUniform, randomBernoulli,
+                                     sample_new_instances, sample_logical_perms)
 from Representation.representation import Instance, Knob, Hyperparams
 from Representation.helpers import TreeNode, parse_sexpr, tokenize, isOP
 
@@ -17,7 +18,7 @@ class TestRandomUniform(unittest.TestCase):
         knobs = []
         random.seed(0)
         selected = randomUniform(knobs)
-        self.assertEqual(selected, [])
+        self.assertEqual(selected, None)
 
     def test_random_uniform_not_deterministic_distribution(self):
         # Over many runs, expect both empty and non-empty outcomes at least once
@@ -53,7 +54,7 @@ class TestRandomBernoulli(unittest.TestCase):
             knobs=[self.knobA, self.knobB, self.knobC],
         )
 
-        self.perms = ["D", "E", "(OR E C)"]
+        self.perms = ["D", "E", "C"]
         self.new_knobs = [self.knobD, self.knobE, self.knobC]
 
     def test_random_bernoulli_returns_none_if_no_selected_knobs(self):
@@ -63,7 +64,7 @@ class TestRandomBernoulli(unittest.TestCase):
 
     def test_random_bernoulli_probability_zero_no_change(self):
         random.seed(0)
-        new_inst = randomBernoulli(0.0, self.instance, self.perms, self.new_knobs)
+        new_inst = randomBernoulli(0.0, self.instance, self.new_knobs, self.instance.knobs)
         # With p=0, there should be no change to the expression
         self.assertIsNotNone(new_inst)
         self.assertEqual(new_inst.value, self.instance.value)
@@ -75,7 +76,7 @@ class TestRandomBernoulli(unittest.TestCase):
 
     def test_random_bernoulli_probability_one_mutates_if_knobs_available(self):
         random.seed(0)
-        new_inst = randomBernoulli(1.0, self.instance, self.perms, self.new_knobs)
+        new_inst = randomBernoulli(1.0, self.instance, self.new_knobs, self.instance.knobs)
         # Expect either at least one mutation or, worst case, same value but logic still valid
         self.assertIsNotNone(new_inst)
         self.assertIsInstance(new_inst, Instance)
@@ -84,7 +85,7 @@ class TestRandomBernoulli(unittest.TestCase):
 
     def test_random_bernoulli_updates_knobs_based_on_tokens(self):
         random.seed(2)
-        new_inst = randomBernoulli(1.0, self.instance, self.perms, self.new_knobs)
+        new_inst = randomBernoulli(1.0, self.instance, self.new_knobs, self.instance.knobs)
         self.assertIsNotNone(new_inst)
         present_tokens = set(tokenize(new_inst.value))
         knob_symbols = {k.symbol for k in new_inst.knobs}
@@ -93,14 +94,14 @@ class TestRandomBernoulli(unittest.TestCase):
 
     def test_random_bernoulli_does_not_duplicate_knobs(self):
         random.seed(3)
-        new_inst = randomBernoulli(1.0, self.instance, self.perms, self.new_knobs)
+        new_inst = randomBernoulli(1.0, self.instance, self.new_knobs, self.instance.knobs)
         self.assertIsNotNone(new_inst)
         symbols = [k.symbol for k in new_inst.knobs]
         self.assertEqual(len(symbols), len(set(symbols)))
 
     def test_random_bernoulli_handles_complex_perm_expression(self):
         random.seed(2)
-        new_inst = randomBernoulli(1.0, self.instance, ["A", "(OR E C)"], self.new_knobs)
+        new_inst = randomBernoulli(1.0, self.instance, [self.knobA, self.knobC, self.knobE], self.instance.knobs)
         self.assertIsNotNone(new_inst)
         knob_symbols = {k.symbol for k in new_inst.knobs}
         self.assertTrue(
@@ -124,7 +125,7 @@ class TestSampleNewInstances(unittest.TestCase):
             knobs=[self.knobA, self.knobB, self.knobC],
         )
 
-        self.perms = ["D", "E", "(OR E C)"]
+        self.perms = ["D", "E", "C"]
         self.new_knobs = [self.knobD, self.knobE, self.knobC]
 
         self.hyperparams = Hyperparams(
@@ -137,7 +138,7 @@ class TestSampleNewInstances(unittest.TestCase):
     def test_sample_new_instances_returns_dict_of_unique_values(self):
         random.seed(0)
         new_instances = sample_new_instances(
-            0.5, self.hyperparams, self.instance, self.perms, self.new_knobs
+            0.5, self.hyperparams, self.instance, self.new_knobs, self.instance.knobs
         )
         
         self.assertIsInstance(new_instances, dict)
@@ -150,7 +151,7 @@ class TestSampleNewInstances(unittest.TestCase):
     def test_sample_new_instances_respects_neighborhood_size_upper_bound(self):
         random.seed(1)
         new_instances = sample_new_instances(
-            0.5, self.hyperparams, self.instance, self.perms, self.new_knobs
+            0.5, self.hyperparams, self.instance, self.new_knobs, self.instance.knobs
         )
         # Number of unique instances cannot exceed neighborhood_size
         self.assertLessEqual(len(new_instances), self.hyperparams.neighborhood_size)
@@ -175,7 +176,7 @@ class TestSampleNewInstances(unittest.TestCase):
     def test_sample_new_instances_probability_zero(self):
         random.seed(4)
         new_instances = sample_new_instances(
-            0.0, self.hyperparams, self.instance, self.perms, self.new_knobs
+            0.0, self.hyperparams, self.instance, self.new_knobs, self.instance.knobs
         )
         # With p=0, randomBernoulli never mutates; but it still returns instances
         self.assertLessEqual(len(new_instances), 1)
@@ -183,6 +184,30 @@ class TestSampleNewInstances(unittest.TestCase):
             (value, inst), = new_instances.items()
             self.assertEqual(value, self.instance.value)
             self.assertEqual(inst.value, self.instance.value)
+
+class TestSampleLogicalPerms(unittest.TestCase):
+    def test_sample_logical_perms(self):
+            knobs = [
+                Knob(symbol="A", id=1, Value=[]),
+                Knob(symbol="B", id=2, Value=[])
+            ]
+
+            # Test 1: Current OP is AND -> Expects OR pairs + Vars
+            candidates_and, new_knobs = sample_logical_perms("AND", knobs)
+
+            # Expect: "A", "B"
+            self.assertIn("A", candidates_and)
+            self.assertIn("B", candidates_and)
+
+            # Expect Pairs (OR A B), (OR (NOT A) B) ...
+            self.assertIn("(OR A B)", candidates_and)
+            self.assertIn("(OR (NOT A) B)", candidates_and) 
+            self.assertIn("(OR A (NOT B))", candidates_and)
+            self.assertIn("(OR (NOT A) (NOT B))", candidates_and)
+
+            # Test 2: Current OP is OR -> Expects AND pairs
+            candidates_or, new_knobs = sample_logical_perms("OR", knobs)
+            self.assertIn("(AND A B)", candidates_or)
 
 
 if __name__ == "__main__":

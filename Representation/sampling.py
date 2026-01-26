@@ -1,4 +1,3 @@
-
 from Representation.helpers import TreeNode, parse_sexpr, tokenize, isOP
 from Representation.representation import Instance, Knob, Hyperparams
 
@@ -6,10 +5,42 @@ from typing import List
 from copy import deepcopy
 import random
 
+def sample_logical_perms(current_op: str, variables: List[Knob]) -> List[str]:
+    """
+    Generates a 'menu' of new Boolean logic pieces (proposals).
+    """
+    if current_op not in ["AND", "OR"] or not variables:
+        return None, None
+    
+    candidates = []
+    # 1. Simple Variables
+    candidates.extend([v.symbol for v in variables])
+
+    # 2. Complex Pairs
+    # If current is AND, make OR pairs. If OR, make AND pairs.
+    pair_op = "OR" if current_op == "AND" else "AND"
+
+    var_symbols = [v.symbol for v in variables]
+
+    for i in range(len(var_symbols)):
+        for j in range(i + 1, len(var_symbols)):
+            s1 = var_symbols[i]
+            s2 = var_symbols[j]
+            # Form pairs including negations
+            candidates.append(f"({pair_op} {s1} {s2})")
+            candidates.append(f"({pair_op} (NOT {s1}) {s2})")
+            candidates.append(f"({pair_op} {s1} (NOT {s2}))")
+            candidates.append(f"({pair_op} (NOT {s1}) (NOT {s2}))")
+    
+    return candidates, variables
+
 def randomUniform(knobs):
     """
     Perform uniform random sampling to select knobs.
     """
+    if not knobs:
+        return
+    
     selected_knobs = []
     for knob in knobs:
         if random.random() > 0.5:
@@ -17,7 +48,7 @@ def randomUniform(knobs):
 
     return selected_knobs   
 
-def randomBernoulli(p: float, instance: Instance, knob_perms: List, knobs: List[Knob]) -> Instance:
+def randomBernoulli(p: float, instance: Instance, features: List[Knob], knobs: List[Knob]) -> Instance:
     """
     Perform Bernoulli sampling to select a knob for replacement.
     
@@ -33,8 +64,12 @@ def randomBernoulli(p: float, instance: Instance, knob_perms: List, knobs: List[
     new_instances = set()
     instanceExp = deepcopy(instance.value)
     sexp = tokenize(instanceExp)
+    op = sexp[1] if sexp else None
     root = parse_sexpr(sexp)
-    selected_knobs = randomUniform(knob_perms)
+    perms, new_knobs = sample_logical_perms(op, features)
+    selected_knobs = randomUniform(perms)
+
+
     if not selected_knobs:
         return
 
@@ -62,6 +97,7 @@ def randomBernoulli(p: float, instance: Instance, knob_perms: List, knobs: List[
     
     for path in candidates:
         if random.random() < p:
+
             if not selected_knobs:
                 break
             symbol = selected_knobs.pop(0)
@@ -79,16 +115,25 @@ def randomBernoulli(p: float, instance: Instance, knob_perms: List, knobs: List[
             target_idx = path[-1]
             if not valid_path or target_idx >= len(parent.children):
                 continue  # Skip this mutation as the target no longer exists
+            
+            tokens = tokenize(symbol)
+            if len(tokens) > 1 and parent.label == "OR" and tokens[1] == "OR":
+                tokens[tokens.index("OR")] = "AND"
+                symbol = " ".join(tokens).replace("( ", "(").replace(" )", ")")
+
+            elif len(tokens) > 1 and parent.label == "AND" and tokens[1] == "AND":
+                tokens[tokens.index("AND")] = "OR"
+                symbol = " ".join(tokens).replace("( ", "(").replace(" )", ")")
+
+            if str(parent.children[target_idx]) == symbol:
+                continue
 
             parent.children[target_idx] = TreeNode(symbol)
-
             mutant_value = str(mutant_root)
-            
             if mutant_value == instanceExp:
                 continue
 
             new_inst.value = mutant_value
-            tokens = tokenize(symbol)
             for t in tokens:
                 if isOP(t) or t in ['(', ')']:
                     continue
@@ -96,6 +141,10 @@ def randomBernoulli(p: float, instance: Instance, knob_perms: List, knobs: List[
                 knob = next((k for k in knobs if k.symbol == t), None)
                 if knob and knob.symbol not in [k.symbol for k in new_inst.knobs]:
                     new_inst.knobs.append(knob)
+                
+                new_knob = next((k for k in new_knobs if k.symbol == t), None)
+                if new_knob and new_knob.symbol not in [k.symbol for k in new_inst.knobs]:
+                    new_inst.knobs.append(new_knob)
             
     
     present_tokens = set(tokenize(new_inst.value))
