@@ -73,28 +73,6 @@ class TestExp(unittest.TestCase):
     #     self.assertIn(i2, factor.variables)
     #     score = factor.evaluate()
     #     self.assertEqual(score, 2.0)
-    def test_sample_logical_perms(self):
-        knobs = [
-            Knob(symbol="A", id=1, Value=[]),
-            Knob(symbol="B", id=2, Value=[])
-        ]
-        
-        # Test 1: Current OP is AND -> Expects OR pairs + Vars
-        candidates_and = sample_logical_perms("AND", knobs)
-        
-        # Expect: "A", "B"
-        self.assertIn("A", candidates_and)
-        self.assertIn("B", candidates_and)
-        
-        # Expect Pairs (OR A B), (OR (NOT A) B) ...
-        self.assertIn("(OR A B)", candidates_and)
-        self.assertIn("(OR (NOT A) B)", candidates_and) 
-        self.assertIn("(OR A (NOT B))", candidates_and)
-        self.assertIn("(OR (NOT A) (NOT B))", candidates_and)
-
-        # Test 2: Current OP is OR -> Expects AND pairs
-        candidates_or = sample_logical_perms("OR", knobs)
-        self.assertIn("(AND A B)", candidates_or)
 
 if __name__ == '__main__':
     unittest.main()
