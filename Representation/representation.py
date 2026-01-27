@@ -220,8 +220,31 @@ def sample_uniform_random_instances(program_sketch: str, knobs: List[Knob],insta
             expr=exclude_one_symbol(expr,knob.symbol)
 
     return Instance(value=expr,id=instance_id,score=0.0,knobs=knobs)    
-
-  
+def sample_logical_perms(current_op: str, variables: List[Knob]) -> List[str]:
+    """
+    Generates a 'menu' of new Boolean logic pieces (proposals).
+    """
+    candidates = []
+    # 1. Simple Variables
+    candidates.extend([v.symbol for v in variables])
+    
+    # 2. Complex Pairs
+    # If current is AND, make OR pairs. If OR, make AND pairs.
+    pair_op = "OR" if current_op == "AND" else "AND"
+    
+    var_symbols = [v.symbol for v in variables]
+    
+    for i in range(len(var_symbols)):
+        for j in range(i + 1, len(var_symbols)):
+            s1 = var_symbols[i]
+            s2 = var_symbols[j]
+            # Form pairs including negations
+            candidates.append(f"({pair_op} {s1} {s2})")
+            candidates.append(f"({pair_op} (NOT {s1}) {s2})")
+            candidates.append(f"({pair_op} {s1} (NOT {s2}))")
+            candidates.append(f"({pair_op} (NOT {s1}) (NOT {s2}))")
+    return candidates
+ 
 def knobs_from_truth_table(ITable: List[dict]) -> List[Knob]:
     """
     Given a truth table (list of dict rows), extract:
