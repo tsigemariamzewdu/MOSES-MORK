@@ -244,8 +244,7 @@ def sample_logical_perms(current_op: str, variables: List[Knob]) -> List[str]:
             candidates.append(f"({pair_op} {s1} (NOT {s2}))")
             candidates.append(f"({pair_op} (NOT {s1}) (NOT {s2}))")
     return candidates
-
-    return 
+ 
 def knobs_from_truth_table(ITable: List[dict]) -> List[Knob]:
     """
     Given a truth table (list of dict rows), extract:
