@@ -2,6 +2,11 @@ import unittest
 import tempfile
 import os
 import shutil
+import sys
+
+# Add project root to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 from Representation.csv_parser import load_truth_table
 
 
