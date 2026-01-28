@@ -6,7 +6,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from Feature_selection_algo.IG_selection import select_features as ig_select
-from Feature_selection_algo.interaction_mrmr import interaction_aware_mrmr
+from Feature_selection_algo.interaction_mrmr import interaction_aware_mrmr, feature_order
 
 class TestAllFeatureSelection(unittest.TestCase):
     def setUp(self):
@@ -97,6 +97,13 @@ class TestAllFeatureSelection(unittest.TestCase):
                 has_A = True
         
         self.assertTrue(has_A, "Result should contain A in some subset")
+
+    def test_feature_order(self):
+        print("\nTesting Feature Order...")
+        order = feature_order(self.test_csv_path, target_col="O")
+        print(f"Feature Order: {order}")
+        self.assertEqual(order, 3)
+
 
 if __name__ == '__main__':
     unittest.main()
