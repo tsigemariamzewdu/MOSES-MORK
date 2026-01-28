@@ -285,8 +285,8 @@ def build_factor_graph_from_deme(deme: Deme) -> FactorGraph:
     return FactorGraph(variables=variables, factors=factors)
 
 class FitnessOracle:
-    def __init__(self, target_knob_name: str = "O"):
-        self.target_knob_name = target_knob_name
+    def __init__(self, target_vals: List[bool]):
+        self.target_vals = target_vals
         self.memo: dict[str, float] = {}
 
     def get_fitness(self, instance: "Instance") -> float:
@@ -302,21 +302,14 @@ class FitnessOracle:
         
         
         inputs: dict[str, List[bool]] = {}
-        target_vals: List[bool] = []
         
-        # Populate inputs and find target
-        row_count = 0
+        # Populate inputs
+        row_count = len(self.target_vals)
         for knob in instance.knobs:
-            if knob.Value:
-                row_count = len(knob.Value)
-            
-            if knob.symbol == self.target_knob_name:
-                target_vals = knob.Value
-            else:
-                inputs[knob.symbol] = knob.Value
+            inputs[knob.symbol] = knob.Value
         
-        # If target not found or no data, return 0.0 (or handle error)
-        if not target_vals or row_count == 0:
+        # If target not found or no data, return 0.0(or handle error)
+        if row_count == 0:
             return 0.0
         
         try:
@@ -327,7 +320,7 @@ class FitnessOracle:
             predicted_vals = [False] * row_count
 
         # Count how many predictions match the target and Compute accuracy
-        matches = sum(1 for p, t in zip(predicted_vals, target_vals) if p == t)
+        matches = sum(1 for p, t in zip(predicted_vals, self.target_vals) if p == t)
         accuracy = matches / row_count if row_count > 0 else 0.0
         
         self.memo[instance.value] = accuracy
