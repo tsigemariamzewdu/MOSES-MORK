@@ -1,6 +1,5 @@
 import csv
 import io
-from .representation import knobs_from_truth_table 
 
 
 def load_truth_table(filepath, output_col='O'):
@@ -38,9 +37,4 @@ def load_truth_table(filepath, output_col='O'):
         return [], []
 
     return data_rows, output_values
-
-
-
-# data_rows, targets = load_truth_table('Representation/test.csv', output_col='O')
-# print(knobs_from_truth_table(data_rows))
 

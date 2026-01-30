@@ -1,7 +1,20 @@
-from Representation.helpers import TreeNode, parse_sexpr, tokenize, isOP
-from Representation.representation import Instance, Knob, Hyperparams
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from typing import List
+
+from Representation.helpers import TreeNode, parse_sexpr, tokenize, isOP
+from Representation.representation import (Instance, Knob,
+                                           Deme, Hyperparams,
+                                           FitnessOracle,
+                                           knobs_from_truth_table)
+from Representation.csv_parser import load_truth_table
+
+from Feature_selection_algo.interaction_mrmr import interaction_aware_mrmr, feature_order
+from reduct.enf.main import reduce
+from hyperon import MeTTa
+import csv
+from typing import List, Dict
 from copy import deepcopy
 import random
 
@@ -61,7 +74,6 @@ def randomBernoulli(p: float, instance: Instance, features: List[Knob], knobs: L
     Returns:
         A set of newly generated instances.
     """
-    new_instances = set()
     instanceExp = deepcopy(instance.value)
     sexp = tokenize(instanceExp)
     op = sexp[1] if sexp else None
@@ -90,7 +102,7 @@ def randomBernoulli(p: float, instance: Instance, features: List[Knob], knobs: L
 
     new_inst = Instance(
                 value=str(mutant_root),
-                id=instance.id + 1,
+                id=instance.id,
                 score=0.0,
                 knobs=deepcopy(instance.knobs)
             )
@@ -128,6 +140,15 @@ def randomBernoulli(p: float, instance: Instance, features: List[Knob], knobs: L
             if str(parent.children[target_idx]) == symbol:
                 continue
 
+            is_sibling_duplicate = False
+            for i, child in enumerate(parent.children):
+                if i != target_idx and str(child) == symbol:
+                    is_sibling_duplicate = True
+                    break
+            
+            if is_sibling_duplicate:
+                continue
+
             parent.children[target_idx] = TreeNode(symbol)
             mutant_value = str(mutant_root)
             if mutant_value == instanceExp:
@@ -146,14 +167,13 @@ def randomBernoulli(p: float, instance: Instance, features: List[Knob], knobs: L
                 if new_knob and new_knob.symbol not in [k.symbol for k in new_inst.knobs]:
                     new_inst.knobs.append(new_knob)
             
-    
     present_tokens = set(tokenize(new_inst.value))
     new_inst.knobs = [k for k in new_inst.knobs if k.symbol in present_tokens]
 
     return new_inst
 
 
-def sample_new_instances(p: float, hyperparams: Hyperparams, instance: Instance, knob_perms: List, knobs: List[Knob]) -> List[Instance]:
+def sample_new_instances(p: float, hyperparams: Hyperparams, instance: Instance, features: List, knobs: List[Knob]) -> Dict[str, Instance]:
     """
     Sample new instances using Bernoulli sampling.
     
@@ -167,9 +187,56 @@ def sample_new_instances(p: float, hyperparams: Hyperparams, instance: Instance,
         A dict of newly generated instances.
     """
     new_instances = {}
+    id_counter = 1
     for _ in range(hyperparams.neighborhood_size):
-        new_inst = randomBernoulli(p, instance, knob_perms, knobs)
+        new_inst = randomBernoulli(p, instance, features, knobs)
         if new_inst and new_inst.value not in new_instances:
+            new_inst.id = instance.id + id_counter
             new_instances[new_inst.value] = new_inst
+            id_counter += 1
     
     return new_instances
+
+
+def sample_from_TTable(csv_path: str, hyperparams: Hyperparams, exemplar: Instance, knobs: List[Knob], target_vals: List[bool] ,output_col: str = 'O'):
+    """
+    Samples demes from a truth table CSV file using interaction-aware mRMR feature selection.
+    Args:
+        csv_path (str): Path to the CSV file containing the truth table.
+        hyperparams (Hyperparams): Hyperparameters for sampling.
+        exemplar (Instance): The exemplar instance to base sampling on.
+        output_col (str): Name of the output/target column in the CSV.
+    Returns:
+        List[Deme]: A list of sampled demes.
+    """
+    order = feature_order(csv_path, output_col)
+    features = interaction_aware_mrmr(
+        csv_path=csv_path,
+        target_col=output_col,
+        k=5,
+        max_interaction_order=order,
+        output_type='subsets'
+    )
+
+    demes = []
+    metta = MeTTa()
+    fitness = FitnessOracle(target_vals)
+
+    for feat in features:
+        selected_features = [k for k in knobs if k.symbol in (feat if isinstance(feat, (list, tuple)) else [feat])]
+        instances = sample_new_instances(0.5, hyperparams, exemplar, selected_features, exemplar.knobs)
+        unique_instances = {}
+        for inst in instances.values():
+            reduced = str(reduce(metta, inst.value))
+            inst.value = reduced
+
+            present_tokens = set(tokenize(inst.value))
+            inst.knobs = [k for k in inst.knobs if k.symbol in present_tokens]
+
+            inst.score = fitness.get_fitness(inst)
+            if inst.value not in unique_instances:
+                unique_instances[inst.value] = inst
+            
+        demes.append(Deme(instances=list(unique_instances.values()), id=(len(demes)), q_hyper=hyperparams))
+        
+    return demes

@@ -2,8 +2,11 @@ import unittest
 import random
 from copy import deepcopy
 from Representation.sampling import (randomUniform, randomBernoulli,
-                                     sample_new_instances, sample_logical_perms)
-from Representation.representation import Instance, Knob, Hyperparams
+                                     sample_new_instances, sample_logical_perms,
+                                     sample_from_TTable)
+from Representation.representation import (Instance, Knob, Deme,
+                                           Hyperparams, knobs_from_truth_table)
+from Representation.csv_parser import load_truth_table
 from Representation.helpers import TreeNode, parse_sexpr, tokenize, isOP
 
 class TestRandomUniform(unittest.TestCase):
@@ -208,6 +211,93 @@ class TestSampleLogicalPerms(unittest.TestCase):
             # Test 2: Current OP is OR -> Expects AND pairs
             candidates_or, new_knobs = sample_logical_perms("OR", knobs)
             self.assertIn("(AND A B)", candidates_or)
+
+class TestSampleFromTTable(unittest.TestCase):
+    def setUp(self):
+        # Use the provided binary truth table CSV
+        self.test_csv_path = "example_data/test_bin.csv"
+
+        # Build exemplar from this table
+        tt, target_vals = load_truth_table(self.test_csv_path, "O")
+        knobs = knobs_from_truth_table(tt)
+        # Simple exemplar: AND over all input knobs (A..F)
+        expr = "(AND " + " ".join(k.symbol for k in knobs) + ")"
+        self.exemplar = Instance(value=expr, id=0, score=0.0, knobs=knobs)
+        self.hyperparams = Hyperparams(
+            mutation_rate=0.3,
+            crossover_rate=0.7,
+            neighborhood_size=5,
+            num_generations=10,
+        )
+        self.target_vals = target_vals
+        self.knobs = knobs
+
+    def test_sample_from_TTable_basic_structure(self):
+        random.seed(0)
+        demes = sample_from_TTable(
+            self.test_csv_path,
+            self.hyperparams,
+            self.exemplar,
+            self.knobs,
+            self.target_vals,
+            output_col="O",
+        )
+        # Returns list of Deme
+        self.assertIsInstance(demes, list)
+        self.assertGreater(len(demes), 0)
+        for deme in demes:
+            self.assertIsInstance(deme, Deme)
+            self.assertIsInstance(deme.instances, list)
+            for inst in deme.instances:
+                self.assertIsInstance(inst, Instance)
+                # Value string should be non-empty expression
+                self.assertIsInstance(inst.value, str)
+                self.assertNotEqual(inst.value.strip(), "")
+
+    def test_sample_from_TTable_respects_neighborhood_size(self):
+        random.seed(1)
+        demes = sample_from_TTable(
+            self.test_csv_path,
+            self.hyperparams,
+            self.exemplar,
+            self.knobs,
+            self.target_vals,
+            output_col="O",
+        )
+        for deme in demes:
+            self.assertLessEqual(
+                len(deme.instances),
+                self.hyperparams.neighborhood_size,
+            )
+
+    def test_sample_from_TTable_handles_invalid_csv_path(self):
+        random.seed(2)
+        demes = sample_from_TTable(
+            "non_existent_file.csv",
+            self.hyperparams,
+            self.exemplar,
+            self.knobs,
+            self.target_vals,
+            output_col="O",
+        )
+        # On error it should return an empty list
+        self.assertEqual(demes, [])
+    
+    def test_scored_instances(self):
+        random.seed(3)
+        demes = sample_from_TTable(
+            self.test_csv_path,
+            self.hyperparams,
+            self.exemplar,
+            self.knobs,
+            self.target_vals,
+            output_col="O",
+        )
+        for deme in demes:
+            for inst in deme.instances:
+                self.assertIsInstance(inst.score, float)
+                self.assertGreater(inst.score, 0)
+
 
 
 if __name__ == "__main__":

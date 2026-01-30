@@ -96,6 +96,28 @@ def calculate_interaction_gain(
     
     return relevance - redundancy
 
+def feature_order(csv_path: str, target_col: str) -> int:
+    """
+    A function that returns the practical order limit for feature selection
+    Args:
+        csv_path: Path to the CSV file.
+        target_col: Name of the output/target column.
+    Returns:
+        practical_order: int
+    """
+    try:
+        with open(csv_path, mode='r', encoding='utf-8-sig') as f:
+            reader = csv.DictReader(f)
+            if reader.fieldnames:
+                features = [col for col in reader.fieldnames if col != target_col]
+                num_features = len(features)
+    except FileNotFoundError:
+        print(f"File {csv_path} not found.")
+        num_features = 3
+
+    practical_order = min(num_features, 4)
+    return practical_order
+
 def interaction_aware_mrmr(
     csv_path: str, 
     target_col: str, 
