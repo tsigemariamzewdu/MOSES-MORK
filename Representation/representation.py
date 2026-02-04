@@ -97,6 +97,14 @@ class Knob:
     id: int
     Value: List[bool]
 
+    def __hash__(self):
+        return hash((self.symbol, self.id)) # Hash based on unique fields
+    
+    def __eq__(self, other):
+        if not isinstance(other, Knob):
+            return False
+        return self.symbol == other.symbol and self.id == other.id
+
 @dataclass
 class Instance:
     value: Any
