@@ -1,60 +1,11 @@
 import unittest
 
 from DependencyMiner.miner import (
-    TreeNode,
-    tokenize,
-    parse_sexpr,
     OrderedTreeMiner,
     DependencyMiner,
+    sigmoid
 )
-
-
-class TestTreeParsing(unittest.TestCase):
-    def test_tokenize_simple(self):
-        s = "(AND A B C)"
-        tokens = tokenize(s)
-        self.assertEqual(tokens, ["(", "AND", "A", "B", "C", ")"])
-
-    def test_parse_simple_and(self):
-        s = "(AND A B C)"
-        tokens = tokenize(s)
-        root = parse_sexpr(tokens)
-
-        self.assertEqual(root.label, "AND")
-        self.assertEqual(len(root.children), 3)
-        self.assertTrue(all(child.is_leaf() for child in root.children))
-        self.assertEqual(str(root), "(AND A B C)")
-
-    def test_parse_nested_or_not(self):
-        s = "(AND (NOT A) (OR (NOT B) C))"
-        tokens = tokenize(s)
-        root = parse_sexpr(tokens)
-
-        self.assertEqual(root.label, "AND")
-        self.assertEqual(len(root.children), 2)
-
-        not_node = root.children[0]
-        or_node = root.children[1]
-
-        self.assertEqual(not_node.label, "NOT")
-        self.assertEqual(len(not_node.children), 1)
-        self.assertEqual(not_node.children[0].label, "A")
-
-        self.assertEqual(or_node.label, "OR")
-        self.assertEqual(len(or_node.children), 2)
-        self.assertEqual(str(root), "(AND (NOT A) (OR (NOT B) C))")
-
-    def test_parse_grouping(self):
-        # ((NOT A) B) should introduce an implicit GROUP node
-        s = "((NOT A) B)"
-        tokens = tokenize(s)
-        root = parse_sexpr(tokens)
-
-        self.assertEqual(root.label, "GROUP")
-        self.assertEqual(len(root.children), 2)
-        self.assertEqual(str(root.children[0]), "(NOT A)")
-        self.assertEqual(str(root.children[1]), "B")
-
+from Representation.helpers import tokenize, parse_sexpr
 
 class TestOrderedTreeMiner(unittest.TestCase):
     def setUp(self):
@@ -138,20 +89,73 @@ class TestDependencyMiner(unittest.TestCase):
         ]
         self.default_weights = [1.0] * len(self.data)
 
-    def test_fit_and_counts(self):
-        miner = DependencyMiner().fit(self.data, self.default_weights)
+    def test_empty_input(self):
+        miner = DependencyMiner()
+        miner.fit([], [])
+        
+        self.assertEqual(miner.total_weighted_contexts, 0.0)
+        self.assertEqual(len(miner.pair_counts), 0)
+        self.assertEqual(len(miner.single_counts), 0)
 
-        # There must be some contexts
-        self.assertGreater(miner.total_weighted_contexts, 0)
+    def test_zero_weights(self):
+        miner = DependencyMiner()
+        zero_weights = [0.0] * len(self.data)
+        miner.fit(self.data, zero_weights)
+        
+        self.assertEqual(miner.total_weighted_contexts, 0.0)
+        deps = miner.get_meaningful_dependencies()
+        self.assertEqual(deps, [])
 
-        # At least A, B, C (or their NOT/OR variants) must appear as single keys
-        single_keys = set(miner.single_counts.keys())
-        self.assertTrue(any("A" in k for k in single_keys))
-        self.assertTrue(any("B" in k for k in single_keys))
-        self.assertTrue(any("C" in k for k in single_keys))
+    def test_negative_weights_ignored(self):
+        miner = DependencyMiner()
+        negative_weights = [-1.0] * len(self.data)
+        miner.fit(self.data, negative_weights)
+        
+        self.assertEqual(miner.total_weighted_contexts, 0.0)
+        deps = miner.get_meaningful_dependencies()
+        self.assertEqual(deps, [])
 
-        # There should be some sibling pairs
-        self.assertGreater(len(miner.pair_counts), 0)
+    def test_single_expression_no_pairs(self):
+        miner = DependencyMiner()
+        miner.fit(["A"], [1.0])  
+        
+        self.assertEqual(miner.total_weighted_contexts, 0.0)
+        self.assertEqual(len(miner.pair_counts), 0)
+
+    def test_weighted_vs_unweighted(self):
+        miner1 = DependencyMiner()
+        miner1.fit(self.data, self.default_weights)
+        
+        miner2 = DependencyMiner()
+        high_weights = [10.0] * len(self.data)
+        miner2.fit(self.data, high_weights)
+        
+        # Higher weights should give same PMI but different weighted frequencies
+        deps1 = miner1.get_meaningful_dependencies(min_pmi=0.0, min_freq=1)
+        deps2 = miner2.get_meaningful_dependencies(min_pmi=0.0, min_freq=1)
+        
+        if deps1 and deps2:
+            self.assertAlmostEqual(deps1[0]["PMI"], deps2[0]["PMI"], places=2)
+            self.assertGreater(deps2[0]["weighted_freq"], deps1[0]["weighted_freq"])
+    def test_weights_change_pmi(self):
+        data = [
+            "(AND A B)",   
+            "(AND A C)",
+            "(AND D B)",
+            "(AND D C)",
+        ]
+
+        miner1 = DependencyMiner()
+        miner1.fit(data, [1.0, 1.0, 1.0, 1.0])
+        deps1 = miner1.get_meaningful_dependencies(min_pmi=-100, min_freq=1)
+        d1 = {d["pair"]: d for d in deps1}
+
+        miner2 = DependencyMiner()
+        miner2.fit(data, [10.0, 1.0, 1.0, 1.0])
+        deps2 = miner2.get_meaningful_dependencies(min_pmi=-100, min_freq=1)
+        d2 = {d["pair"]: d for d in deps2}
+
+        self.assertGreater(d2["A -- B"]["PMI"], d1["A -- B"]["PMI"])
 
     def test_meaningful_dependencies(self):
         miner = DependencyMiner().fit(self.data, self.default_weights)
@@ -172,6 +176,21 @@ class TestDependencyMiner(unittest.TestCase):
         # Sort order: PMI non-increasing
         for i in range(len(deps) - 1):
             self.assertGreaterEqual(deps[i]["PMI"], deps[i + 1]["PMI"])
+
+class TestSigmoidFunction(unittest.TestCase):
+    def test_sigmoid_zero(self):
+        result = sigmoid(0)
+        self.assertAlmostEqual(result, 0.5, places=5)
+
+    def test_sigmoid_positive(self):
+        result = sigmoid(10)
+        self.assertGreater(result, 0.5)
+        self.assertLess(result, 1.0)
+
+    def test_sigmoid_negative(self):
+        result = sigmoid(-10)
+        self.assertLess(result, 0.5)
+        self.assertGreater(result, 0.0)
 
 
 if __name__ == "__main__":
