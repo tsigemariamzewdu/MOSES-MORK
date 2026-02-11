@@ -43,21 +43,61 @@ class BetaFactorGraph:
         """
         Registers a Modus Ponens rule: A -> B
         """
+        # parts = pair_str.split(' -- ')
+        # src = parts[0].strip()
+        # dst = parts[1].strip()
+        
+        # # Ensure nodes exist
+        # self.get_or_create_node(src)
+        # self.get_or_create_node(dst)
+
+        # # Store the rule params
+        # self.factors.append({
+        #     'src': src,
+        #     'dst': dst,
+        #     's': rule_strength,
+        #     'c': rule_confidence
+        # })
         parts = pair_str.split(' -- ')
-        src = parts[0].strip()
-        dst = parts[1].strip()
+        if len(parts) != 2: return
+        src, dst = parts[0], parts[1]
         
         # Ensure nodes exist
         self.get_or_create_node(src)
         self.get_or_create_node(dst)
-
-        # Store the rule params
-        self.factors.append({
-            'src': src,
-            'dst': dst,
-            's': rule_strength,
-            'c': rule_confidence
-        })
+        
+        # Check if rule already exists to avoid duplicates
+        existing_rule = None
+        for rule in self.factors:
+            if rule['src'] == src and rule['dst'] == dst:
+                existing_rule = rule
+                break
+        
+        if existing_rule:
+            # UPDATE LOGIC:
+            # Option A: Simple Average (Learning over time)
+            # existing_rule['s'] = (existing_rule['s'] + strength) / 2
+            # existing_rule['c'] = (existing_rule['c'] + confidence) / 2
+            
+            # Option B: High confidence overwrites low confidence (Greedy)
+            # if confidence > existing_rule['c']:
+            #     existing_rule['s'] = strength
+            #     existing_rule['c'] = confidence
+            
+            # Option C: Weighted Update (New data counts for 30%)
+            alpha = 0.7
+            existing_rule['s'] = (1 - alpha) * existing_rule['s'] + alpha * rule_strength
+            existing_rule['c'] = (1 - alpha) * existing_rule['c'] + alpha * rule_confidence
+            
+        else:
+            # CREATE NEW
+            rule = {
+                'src': src,
+                'dst': dst,
+                's': rule_strength,
+                'c': rule_confidence
+            }
+            self.factors.append(rule)
 
     def set_prior(self, name, stv_strength, stv_confidence, base_counts=10.0):
         """
@@ -75,64 +115,91 @@ class BetaFactorGraph:
         node.alpha = (stv_strength * evidence) + 1.0
         node.beta = ((1.0 - stv_strength) * evidence) + 1.0
     
-    def visualize(self, title="Beta Value Network"):
+    def visualize(self, title="Beta Factor Graph"):
         """
-        Visualizes the Factor Graph.
-        - Node Color: Strength (Red=0.0, Yellow=0.5, Green=1.0)
-        - Node Size: Confidence (Larger = More Confident)
-        - Edge Label: Rule Strength & Confidence
+        Visualizes the Factor Graph distinguishing Variables and Factors.
+        - Variable Nodes (Circles): Color=Strength, Size=Confidence
+        - Factor Nodes (Squares): Represent the rules connecting variables
         """
         G = nx.DiGraph()
         
-        # 1. Add Nodes with attributes
-        node_colors = []
-        node_sizes = []
+        # Lists to separate types for drawing
+        var_nodes = []
+        factor_nodes = []
+        
+        var_colors = []
+        var_sizes = []
         labels = {}
         
+        # 1. Add Variable Nodes (Circles)
         for name, node in self.nodes.items():
             G.add_node(name)
+            var_nodes.append(name)
             
-            # Color logic: Map Strength 0->1 to Red->Green
             s = node.strength
-            node_colors.append(s)
-            
-            # Size logic: Map Confidence 0->1 to Size 500->3000
             c = node.confidence
-            node_sizes.append(1000 + (c * 3000))
             
-            # Label: "A\nS:0.9\nC:0.8"
+            var_colors.append(s)
+            var_sizes.append(1000 + (c * 3000))
+            # Label with current belief
             labels[name] = f"{name}\nS:{s:.2f}\nC:{c:.2f}"
 
-        # 2. Add Edges
-        edge_labels = {}
-        for rule in self.factors:
-            G.add_edge(rule['src'], rule['dst'])
-            edge_labels[(rule['src'], rule['dst'])] = f"s:{rule['s']:.2f}\nc:{rule['c']:.2f}"
+        # 2. Add Factor Nodes (Squares) & Edges
+        # Instead of Direct Edges, we do Var -> Factor -> Var
+        for i, rule in enumerate(self.factors):
+            # Create a unique ID for the factor node based on connection
+            f_id = f"F_{rule['src']}_{rule['dst']}_{i}"
+            factor_nodes.append(f_id)
+            
+            G.add_node(f_id)
+            # Label the factor with its rule logic
+            labels[f_id] = f"Rule\nS:{rule['s']:.2f}\nC:{rule['c']:.2f}"
+            
+            # Connect: Source -> Factor -> Destination
+            G.add_edge(rule['src'], f_id)
+            G.add_edge(f_id, rule['dst'])
 
         # 3. Draw
-        plt.figure(figsize=(10, 8))
-        pos = nx.spring_layout(G, k=1.5) # Force-directed layout
+        plt.figure(figsize=(12, 10))
+        # Use spring layout but distinct nodes help separate them
+        pos = nx.spring_layout(G, k=1.0) 
         
-        # Draw Nodes
-        nodes = nx.draw_networkx_nodes(G, pos, 
-                                     node_color=node_colors, 
-                                     node_size=node_sizes, 
-                                     cmap=plt.cm.RdYlGn, # Red-Yellow-Green Colormap
-                                     vmin=0.0, vmax=1.0,
-                                     edgecolors='black')
+        # Draw Variables (Circles)
+        if var_nodes:
+            nodes = nx.draw_networkx_nodes(G, pos, 
+                                        nodelist=var_nodes,
+                                        node_color=var_colors, 
+                                        node_size=var_sizes, 
+                                        cmap=plt.cm.RdYlGn, 
+                                        vmin=0.0, vmax=1.0,
+                                        edgecolors='black',
+                                        node_shape='o') # 'o' for Circle
         
+        # Draw Factors (Squares)
+        if factor_nodes:
+            nx.draw_networkx_nodes(G, pos, 
+                                nodelist=factor_nodes,
+                                node_color='lightgray', 
+                                node_size=2500, 
+                                node_shape='s', # 's' for Square
+                                edgecolors='black',
+                                alpha=0.9)
+
+        # Draw Edges & Labels
         nx.draw_networkx_edges(G, pos, edge_color='gray', arrows=True, arrowsize=20)        
-        nx.draw_networkx_labels(G, pos, labels, font_size=10, font_weight="bold")
-        nx.draw_networkx_edge_labels(G, pos, edge_labels, font_color='blue')
+        nx.draw_networkx_labels(G, pos, labels, font_size=9)
         
-        plt.colorbar(nodes, label="Strength (Probability of True)")
+        if var_nodes:
+            plt.colorbar(nodes, label="Strength (Probability of True)")
+            
         plt.title(title)
         plt.axis('off')
-        # plt.show()
-        output_file = "beta_network.png"
+
+        output_file = "beta_factor_graph.png"
         plt.savefig(output_file)
         print(f"Graph visualization saved to: {output_file}")
         plt.close()
+
 
 
     def run_evidence_propagation(self, steps=5):
@@ -185,33 +252,33 @@ class BetaFactorGraph:
 
 # --- Main Execution ---
 
-data = [
-    {'pair': 'A -- B', 'strength': 0.803, 'confidence': 0.3775}, 
-    {'pair': 'B -- C', 'strength': 0.749, 'confidence': 0.3039}, 
-    {'pair': 'C -- D', 'strength': 0.732, 'confidence': 0.2304},
-]
+# data = [
+#     {'pair': 'A -- B', 'strength': 0.803, 'confidence': 0.3775}, 
+#     {'pair': 'B -- C', 'strength': 0.749, 'confidence': 0.3039}, 
+#     {'pair': 'C -- D', 'strength': 0.732, 'confidence': 0.2304},
+# ]
 
-# 1. Init
-bg = BetaFactorGraph()
+# # 1. Init
+# bg = BetaFactorGraph()
 
-# 2. Load Rules
-for row in data:
-    bg.add_dependency_rule(row['pair'], row['strength'], row['confidence'])
+# # 2. Load Rules
+# for row in data:
+#     bg.add_dependency_rule(row['pair'], row['strength'], row['confidence'])
 
-# 3. CRITICAL STEP: Set Priors (Anchors)
-# You MUST tell the graph that at least one node is "True" or "False".
-# Otherwise, 0 * 0.8 = 0.
-bg.set_prior("A", stv_strength=0.9, stv_confidence=0.8) # "We are pretty sure A is True"
+# # 3. CRITICAL STEP: Set Priors (Anchors)
+# # You MUST tell the graph that at least one node is "True" or "False".
+# # Otherwise, 0 * 0.8 = 0.
+# bg.set_prior("A", stv_strength=0.9, stv_confidence=0.8) # "We are pretty sure A is True"
 
-# 4. Run
-bg.run_evidence_propagation(steps=10)
+# # 4. Run
+# bg.run_evidence_propagation(steps=10)
 
-# 5. Results
-print("\n--- Final STV Results ---")
-print(f"{'Variable':<10} | {'Strength':<8} | {'Confidence':<10} | {'Counts (a/b)'}")
-for name, node in bg.nodes.items():
-    s = node.strength
-    c = node.confidence
-    print(f"{name:<10} | {s:.4f}   | {c:.4f}     | {node.alpha:.1f}/{node.beta:.1f}")
+# # 5. Results
+# print("\n--- Final STV Results ---")
+# print(f"{'Variable':<10} | {'Strength':<8} | {'Confidence':<10} | {'Counts (a/b)'}")
+# for name, node in bg.nodes.items():
+#     s = node.strength
+#     c = node.confidence
+#     print(f"{name:<10} | {s:.4f}   | {c:.4f}     | {node.alpha:.1f}/{node.beta:.1f}")
 
-bg.visualize()
+# bg.visualize()

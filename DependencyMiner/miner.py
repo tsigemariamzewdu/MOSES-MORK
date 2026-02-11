@@ -189,13 +189,13 @@ class DependencyMiner:
             if pmi >= min_pmi:
                 results.append({
                     "pair": f"{k1} -- {k2}",
-                    "freq": pair_count,
-                    "weighted_freq": round(pair_weight, 4),
-                    "PMI": round(pmi, 3),
+                    # "freq": pair_count,
+                    # "weighted_freq": round(pair_weight, 4),
+                    # "PMI": round(pmi, 3),
                     "strength": round(sigmoid(pmi), 3),
                     "confidence": round(p_xy, 4),
-                    "Lift": round(lift, 2)
+                    # "Lift": round(lift, 2)
                 })
         
-        return sorted(results, key=lambda x: x['PMI'], reverse=True)
+        return sorted(results, key=lambda x: x['confidence'], reverse=True)
 

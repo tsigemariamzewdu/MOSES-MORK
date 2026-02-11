@@ -164,14 +164,14 @@ class TestDependencyMiner(unittest.TestCase):
         # Each dependency entry must contain required keys
         for d in deps:
             self.assertIn("pair", d)
-            self.assertIn("freq", d)
-            self.assertIn("PMI", d)
-            self.assertIn("Lift", d)
-            self.assertGreaterEqual(d["freq"], 2)
+            self.assertIn("strength", d)
+            self.assertIn("confidence", d)
+            # self.assertIn("Lift", d)
+            # self.assertGreaterEqual(d["freq"], 2)
 
         # Sort order: PMI non-increasing
         for i in range(len(deps) - 1):
-            self.assertGreaterEqual(deps[i]["PMI"], deps[i + 1]["PMI"])
+            self.assertGreaterEqual(deps[i]["confidence"], deps[i + 1]["confidence"])
 
 
 if __name__ == "__main__":
