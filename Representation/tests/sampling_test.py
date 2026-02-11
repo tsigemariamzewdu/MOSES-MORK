@@ -64,6 +64,24 @@ class TestRandomBernoulli(unittest.TestCase):
         # Force randomUniform to always return empty by using no perms
         new_inst = randomBernoulli(0.5, self.instance, [], self.new_knobs)
         self.assertIsNone(new_inst)
+    
+    def test_random_bernoulli_does_not_duplicate_knobs(self):
+        random.seed(3)
+        new_inst = randomBernoulli(1.0, self.instance, self.new_knobs, self.instance.knobs)
+        self.assertIsNotNone(new_inst)
+        symbols = [k.symbol for k in new_inst.knobs]
+        self.assertEqual(len(symbols), len(set(symbols)))
+
+    def test_random_bernoulli_append_on_false_probability(self):
+        random.seed(42)
+        
+        new_inst = randomBernoulli(0.0, self.instance, self.new_knobs, self.instance.knobs)
+        
+        self.assertIsNotNone(new_inst)
+        self.assertNotEqual(new_inst.value, self.instance.value)
+        self.assertGreater(len(new_inst.value), len(self.instance.value))
+        self.assertTrue("D" in new_inst.value or "E" in new_inst.value)
+        
 
     def test_random_bernoulli_probability_zero_no_change(self):
         random.seed(0)
