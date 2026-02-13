@@ -16,9 +16,7 @@ from hyperon import MeTTa
 import csv
 from typing import List, Dict
 from copy import deepcopy
-from collections import deque
 import random
-
 
 def sample_logical_perms(current_op: str, variables: List[Knob]) -> List[str]:
     """
@@ -61,9 +59,7 @@ def randomUniform(knobs, hyperparams: Hyperparams):
 
     return selected_knobs   
 
-
 def randomBernoulli(hyperparams: Hyperparams, instance: Instance, features: List[Knob], knobs: List[Knob]) -> Instance:
-
     """
     Perform Bernoulli sampling to select a knob for replacement.
     
@@ -86,49 +82,36 @@ def randomBernoulli(hyperparams: Hyperparams, instance: Instance, features: List
 
 
     if not selected_knobs:
-        return None
-
+        return
 
     candidates = [[]]
     queue = [(root, [])]
     mutant_root = deepcopy(root)
-    candidates = []
-    queue = deque([(mutant_root, None)])
+
 
     while queue:
-        curr_node,parent = queue.popleft()
-
+        curr_node, curr_path = queue.pop(0)
+        
         for i, child in enumerate(curr_node.children):
-            candidates.append((curr_node, i,parent))
-
+            child_path = curr_path + [i]
+            candidates.append(child_path)
+            
             if not child.is_leaf():
-                queue.append((child,curr_node))
-
+                queue.append((child, child_path))
 
     new_inst = Instance(
-        value=str(mutant_root),
-        id=instance.id,
-        score=0.0,
-        knobs=deepcopy(instance.knobs)
-    )
-
-   
-    knob_map = {k.symbol: k for k in knobs}
-    new_knob_map = {k.symbol: k for k in new_knobs}
-
-
-    selected_knobs = deque(selected_knobs)
-
-   
-    added_symbols = set(k.symbol for k in new_inst.knobs)
-
-    for parent, target_idx, grandparent in candidates:
+                value=str(mutant_root),
+                id=instance.id,
+                score=0.0,
+                knobs=deepcopy(instance.knobs)
+            )
     
+    for path in candidates:
+
         if not selected_knobs:
             break
-
+        # symbol = selected_knobs.pop(0)
         symbol = selected_knobs[0]
-
 
         # Navigate to the PARENT of the target node using the path
         parent = mutant_root
@@ -144,9 +127,7 @@ def randomBernoulli(hyperparams: Hyperparams, instance: Instance, features: List
         if not valid_path:
             continue  # Skip this mutation as the target no longer exists
         
-
         tokens = tokenize(symbol)
-
         if len(tokens) > 1 and parent.label == "OR" and tokens[1] == "OR":
             tokens[tokens.index("OR")] = "AND"
             symbol = " ".join(tokens).replace("( ", "(").replace(" )", ")")
@@ -154,7 +135,6 @@ def randomBernoulli(hyperparams: Hyperparams, instance: Instance, features: List
         if len(tokens) > 1 and parent.label == "AND" and tokens[1] == "AND":
             tokens[tokens.index("AND")] = "OR"
             symbol = " ".join(tokens).replace("( ", "(").replace(" )", ")")
-
 
 
         rand = random.random()
@@ -178,74 +158,41 @@ def randomBernoulli(hyperparams: Hyperparams, instance: Instance, features: List
                 append_target = grandparent
 
             if append_target.label not in ["AND", "OR"]:
-
                 continue
 
-            parent.children[target_idx] = TreeNode(symbol)
-            selected_knobs.popleft()
-
-        else:
-
-            append_target=parent
-
-            if append_target.label =="NOT":
-                if grandparent is None:
-                    continue
-                append_target = grandparent
-
-            if append_target.label  not in ("AND","OR"):
-                continue
-
-            duplicate = False
-             
+            is_duplicate = False
             for child in append_target.children:
                 if str(child) == symbol:
-
                     is_duplicate = True; break
             
             if not is_duplicate:
                 append_target.children.append(TreeNode(symbol))
                 selected_knobs.pop(0)
                 
-
         mutant_value = str(mutant_root)
         if mutant_value == instanceExp:
             continue
 
         new_inst.value = mutant_value
-
-    
         for t in tokens:
             if isOP(t) or t in ['(', ')']:
                 continue
 
-            knob = knob_map.get(t)
-            if knob and knob.symbol not in added_symbols:
+            knob = next((k for k in knobs if k.symbol == t), None)
+            if knob and knob.symbol not in [k.symbol for k in new_inst.knobs]:
                 new_inst.knobs.append(knob)
-                added_symbols.add(knob.symbol)
-
-            new_knob = new_knob_map.get(t)
-            if new_knob and new_knob.symbol not in added_symbols:
+            
+            new_knob = next((k for k in new_knobs if k.symbol == t), None)
+            if new_knob and new_knob.symbol not in [k.symbol for k in new_inst.knobs]:
                 new_inst.knobs.append(new_knob)
-                added_symbols.add(new_knob.symbol)
-
 
     present_tokens = set(tokenize(new_inst.value))
-
-    final_knobs = []
-    for k in new_inst.knobs:
-        if k.symbol in present_tokens:
-            final_knobs.append(k)
-            
-
-    new_inst.knobs = final_knobs
+    new_inst.knobs = [k for k in new_inst.knobs if k.symbol in present_tokens]
 
     return new_inst
 
 
-
 def sample_new_instances(hyperparams: Hyperparams, instance: Instance, features: List, knobs: List[Knob]) -> List[Instance]:
-
     """
     Sample new instances using Bernoulli sampling.
     
