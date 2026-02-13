@@ -64,7 +64,18 @@ def randomUniform(knobs, hyperparams: Hyperparams):
 
 def randomBernoulli(hyperparams: Hyperparams, instance: Instance,
                      features: List[Knob], knobs: List[Knob]) -> Instance:
-
+    """
+    Perform Bernoulli sampling to select a knob for replacement.
+    
+    Args:
+        p (float): Probability of selecting a knob.
+        hyperparams: neihborhood_size identification.
+        instance: The instance object (exemplar).
+        knobs (List): List of knob objects to sample from.
+        
+    Returns:
+        A set of newly generated instances.
+    """
     instanceExp = deepcopy(instance.value)
     sexp = tokenize(instanceExp)
     op = sexp[1] if sexp else None
