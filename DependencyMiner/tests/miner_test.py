@@ -191,7 +191,6 @@ class TestDependencyMiner(unittest.TestCase):
         # Each dependency entry must contain required keys
         for d in deps:
             self.assertIn("pair", d)
-
             self.assertIn("strength", d)
             self.assertIn("confidence", d)
             # self.assertIn("Lift", d)
