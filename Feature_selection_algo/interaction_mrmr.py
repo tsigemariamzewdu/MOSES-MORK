@@ -86,20 +86,10 @@ def calculate_interaction_gain(
         redundancy = 0.0
         for sel_feat in selected_features:
             # Calculate MI between candidate features and this selected feature
-            first=calculate_joint_mutual_information(
-                candidate_features + [sel_feat], 
-                sel_feat
-            ) 
-            second = calculate_joint_entropy([sel_feat])
-            print("first ",first)
-            print("second ",second)
             mi = calculate_joint_mutual_information(
                 candidate_features + [sel_feat], 
                 sel_feat
             ) - calculate_joint_entropy([sel_feat])
-
-            alt_mi = calculate_joint_mutual_information(candidate_features, sel_feat)
-            print("alt_mi ", alt_mi)
             redundancy += abs(mi)
         redundancy /= len(selected_features)
     else:
@@ -281,28 +271,28 @@ def interaction_aware_mrmr(
     return selected
 
 
-if __name__ == "__main__":
-    csv_file = "example_data/test_redundant.csv"
-    target_column = "O"
+# if __name__ == "__main__":
+#     csv_file = "example_data/test_bin.csv"
+#     target_column = "O"
     
-    print("=" * 60)
-    print("Interaction-Aware mRMR Feature Selection")
-    print("=" * 60)
-    print('')
+#     print("=" * 60)
+#     print("Interaction-Aware mRMR Feature Selection")
+#     print("=" * 60)
+#     print('')
     
-    # Test with different interaction orders
-    for max_order in [1, 2, 3]:
-        print(f"\nMax Interaction Order: {max_order}")
-        print("-" * 60)
+#     # Test with different interaction orders
+#     for max_order in [1, 2, 3]:
+#         print(f"\nMax Interaction Order: {max_order}")
+#         print("-" * 60)
         
-        results = interaction_aware_mrmr(
-            csv_file, 
-            target_column, 
-            k=5, 
-            max_interaction_order=max_order,
-            output_type='lists'
-        )
+#         results = interaction_aware_mrmr(
+#             csv_file, 
+#             target_column, 
+#             k=5, 
+#             max_interaction_order=max_order,
+#             output_type='lists'
+#         )
         
-        print(f"Selected Feature Set: {results}")
+#         print(f"Selected Feature Set: {results}")
     
-    print("\n" + "=" * 60)
+#     print("\n" + "=" * 60)
