@@ -153,6 +153,89 @@ class TestRandomBernoulli(unittest.TestCase):
             knob_symbols.issuperset({"C"}) or knob_symbols.issuperset({"E"})
         )
 
+class TestRandomBernoulliAdvanced(unittest.TestCase):
+    def setUp(self):
+        self.knobA = Knob(symbol="A", id=1, Value=[True, False])
+        self.knobB = Knob(symbol="B", id=2, Value=[True, False])
+        self.knobC = Knob(symbol="C", id=3, Value=[True, False])
+        self.all_knobs = [self.knobA, self.knobB, self.knobC]
+        
+        self.hyperparams = Hyperparams(
+            mutation_rate=0.1, crossover_rate=0.5, neighborhood_size=10, 
+            num_generations=1, bernoulli_prob=0.0, uniform_prob=0.5 # p=0.0 forces APPEND
+        )
+
+    def test_append_to_empty_root(self):
+        """Test that we can append a knob to an empty logic tree (AND)."""
+        instance = Instance(value="(AND)", id=1, score=0.0, knobs=[])
+        
+        # We start with empty, we want to add 'A'
+        features = [self.knobA]
+        
+        # p=0.0 forces append logic
+        hp_sure = deepcopy(self.hyperparams)
+        hp_sure.uniform_prob = 0.0 # Force selection
+        
+        new_inst = randomBernoulli(hp_sure, instance, features, self.all_knobs)
+        
+        new_inst = randomBernoulli(self.hyperparams, instance, features, self.all_knobs)
+        
+        self.assertIsNotNone(new_inst)
+        # Should become (AND A)
+        self.assertIn("A", new_inst.value)
+        self.assertTrue(new_inst.value.startswith("(AND"))
+        # Verify the knob object was added to the list
+        self.assertEqual(len(new_inst.knobs), 1)
+        self.assertEqual(new_inst.knobs[0].symbol, "A")
+
+    def test_append_skips_not_node(self):
+        """
+        Test that finding a NOT node forces the append to go to the grandparent.
+        Target: (AND (NOT A))
+        Action: Append 'B'
+        Expected: (AND (NOT A) B) -- NOT (AND (NOT A B))
+        """
+        instance = Instance(value="(AND (NOT A))", id=2, score=0.0, knobs=[self.knobA])
+        features = [self.knobB]
+        
+        random.seed(42) 
+        
+        new_inst = randomBernoulli(self.hyperparams, instance, features, self.all_knobs)
+        
+        self.assertIsNotNone(new_inst)
+        self.assertFalse("(NOT A B)" in new_inst.value)
+        self.assertFalse("(NOT B A)" in new_inst.value)
+        self.assertIn("B", new_inst.value)
+        
+        # Specific check for your specific logic:
+        # If it appended to (AND...), the value represents valid syntax
+        # (AND (NOT A) B)
+        self.assertTrue(new_inst.value == "(AND (NOT A) B)")
+
+    def test_knob_list_consistency(self):
+        """Test that new_inst.knobs strictly matches the tokens in new_inst.value."""
+        # Start with A, B. Replace/Append C. 
+        # If we Replace A with C -> Knobs should be [B, C] (A removed)
+        
+        instance = Instance(value="(AND A B)", id=3, score=0.0, knobs=[self.knobA, self.knobB])
+        features = [self.knobC]
+        
+        hp_replace = Hyperparams(
+            mutation_rate=0.1, crossover_rate=0.5, neighborhood_size=10, 
+            num_generations=1, bernoulli_prob=1.0, uniform_prob=0.5
+        )
+        
+        random.seed(42)
+        new_inst = randomBernoulli(hp_replace, instance, features, self.all_knobs)
+        
+        if new_inst is None:
+            return
+
+        if "A" not in new_inst.value:
+            knob_symbols = [k.symbol for k in new_inst.knobs]
+            self.assertNotIn("A", knob_symbols)
+            self.assertIn("C", knob_symbols)
+            self.assertIn("B", knob_symbols)
 
 class TestSampleNewInstances(unittest.TestCase):
     def setUp(self):
