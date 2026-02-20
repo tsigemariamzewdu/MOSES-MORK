@@ -1,5 +1,4 @@
 import math
-import csv
 from typing import List, Dict, Set, Tuple, FrozenSet, Union
 from itertools import combinations
 import sys
@@ -111,18 +110,15 @@ def feature_order(csv_path: str, target_col: str) -> int:
     Returns:
         practical_order: int
     """
-    try:
-        with open(csv_path, mode='r', encoding='utf-8-sig') as f:
-            reader = csv.DictReader(f)
-            if reader.fieldnames:
-                features = [col for col in reader.fieldnames if col != target_col]
-                num_features = len(features)
-    except FileNotFoundError:
-        print(f"File {csv_path} not found.")
+    data_rows, _target_values = load_truth_table(csv_path, target_col)
+    if not data_rows:
+        # Keep a conservative default when the file is missing/empty/unreadable.
         num_features = 3
+    else:
+        # ``load_truth_table`` returns rows without the output column, so keys are features.
+        num_features = len(data_rows[0].keys())
 
-    practical_order = min(num_features, 4)
-    return practical_order
+    return min(num_features, 4)
 def interaction_aware_mrmr(
     csv_path: str, 
     target_col: str, 
@@ -131,8 +127,21 @@ def interaction_aware_mrmr(
     output_type: str = 'list'
 ) -> Union[List[Tuple[FrozenSet[str], float]], Set[str], Set[Union[str, Tuple[str, ...]]]]:
     """
-    Extended mRMR that considers higher-order feature interactions
-    and automatically stops when cumulative gain no longer increases.
+
+    Extended mRMR that considers higher-order feature interactions 
+
+    Args:
+        csv_path: Path to the CSV file.
+        target_col: Name of the output/target column.
+        k: Optional  Number of feature subsets to select if not specified or None - automatically stops when cumulative gain no longer increases..
+        max_interaction_order: Maximum size of feature combinations to consider (1=single, 2=pairs, etc.)
+        output_type: Format of the return value. 
+            'list': Returns List[Tuple[FrozenSet[str], float]] (default).
+            'set': Returns Set[str] (flattened set of all unique feature names).
+            'subsets': Returns Set[Union[str, Tuple[str, ...]]] (set of selected subsets as strings or tuples).
+        
+    Returns:
+        Depends on output_type.
     """
 
     # 1. Load Data
@@ -218,7 +227,6 @@ def interaction_aware_mrmr(
         # Stop conditions
         if (
             best_candidate is None
-            or best_score <= 0
             or cumulative_gain + best_score <= cumulative_gain
         ):
             # print(f" best_score: {best_score}, cumulative_gain: {cumulative_gain}")
