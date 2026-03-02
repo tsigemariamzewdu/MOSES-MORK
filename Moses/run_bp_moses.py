@@ -4,12 +4,13 @@ from Representation.representation import *
 from Representation.helpers import *
 from Representation.csv_parser import load_truth_table
 from Representation.selection import select_top_k, tournament_selection
-from Representation.sampling import sample_from_TTable
+from Representation.sampling import sample_from_TTable, reduce_and_score
 
 from Variation_quantale.crossover import VariationQuantale, crossTopOne
 from Variation_quantale.mutation import Mutation
 
 from FactorGraph_EDA.beta_bp import BetaFactorGraph
+from hyperon import MeTTa
 
 import random
 import math
@@ -33,6 +34,7 @@ def _finalize_metapop(metapop: List[Instance], fg_type=None) -> List[Instance]:
 
 def run_variation(deme, fitness, hyperparams, target, min_xover_neighbors=5):
     bg = BetaFactorGraph()
+    metta = MeTTa()
     
     for generation in range(hyperparams.num_generations):
         print("-" * 60)
@@ -72,14 +74,15 @@ def run_variation(deme, fitness, hyperparams, target, min_xover_neighbors=5):
         # Track existing values to prevent any duplicates
         existing_values = {inst.value for inst in deme.instances}
         new_candidates = []
+        raw_candidate_values = set()
 
         if len(deme.instances) >= min_xover_neighbors:
             raw_children = crossTopOne(selected_exemplars, stv_dict, target)
             for inst in raw_children:
                 inst.value = prune_duplicate_children(inst.value)
-                if inst.value not in existing_values:
+                if inst.value not in existing_values and inst.value not in raw_candidate_values:
                     new_candidates.append(inst)
-                    existing_values.add(inst.value)
+                    raw_candidate_values.add(inst.value)
         else:
             print(f"Skipping crossover (neighborhood size {len(deme.instances)} < {min_xover_neighbors})")
 
@@ -89,20 +92,22 @@ def run_variation(deme, fitness, hyperparams, target, min_xover_neighbors=5):
         child1 = mutation.execute_additive()
         if isinstance(child1, Instance):
             child1.value = prune_duplicate_children(child1.value)
-            if child1.value not in existing_values:
-                child1.score = fitness.get_fitness(child1)
+            if child1.value not in existing_values and child1.value not in raw_candidate_values:
                 new_candidates.append(child1)
-                existing_values.add(child1.value)
+                raw_candidate_values.add(child1.value)
 
         child2 = mutation.execute_multiplicative()
         if isinstance(child2, Instance):
             child2.value = prune_duplicate_children(child2.value)
-            if child2.value not in existing_values:
-                child2.score = fitness.get_fitness(child2)
+            if child2.value not in existing_values and child2.value not in raw_candidate_values:
                 new_candidates.append(child2)
-                existing_values.add(child2.value)
+                raw_candidate_values.add(child2.value)
 
-        deme.instances.extend(new_candidates)
+        reduced_candidates = reduce_and_score(new_candidates, fitness, metta)
+        reduced_candidates = [inst for inst in reduced_candidates if inst.value not in existing_values]
+        for inst in reduced_candidates:
+            existing_values.add(inst.value)
+        deme.instances.extend(reduced_candidates)
     
     return deme
 
