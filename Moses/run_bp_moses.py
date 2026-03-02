@@ -3,7 +3,7 @@ from DependencyMiner.miner import DependencyMiner
 from Representation.representation import *
 from Representation.helpers import *
 from Representation.csv_parser import load_truth_table
-from Representation.selection import select_top_k, tournament_selection
+from Representation.selection import select_top_k, tournament_selection, boltzmann_roulette_selection
 from Representation.sampling import sample_from_TTable, reduce_and_score
 
 from Variation_quantale.crossover import VariationQuantale, crossTopOne
@@ -40,7 +40,13 @@ def run_variation(deme, fitness, hyperparams, target, min_xover_neighbors=5):
         print("-" * 60)
         print(f"\n--- Generation {generation + 1} ---")
 
-        selected_exemplars = select_top_k(deme, k=7)
+        boltzmann_temp = max(0.1, 1.0 * (0.95 ** generation))
+        selected_exemplars = boltzmann_roulette_selection(
+            deme,
+            k=7,
+            temperature=boltzmann_temp,
+            elite_count=1,
+        )
         values = [inst.value for inst in deme.instances]
         weights = [inst.score for inst in deme.instances]
         
