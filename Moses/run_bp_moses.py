@@ -31,35 +31,6 @@ def _finalize_metapop(metapop: List[Instance], fg_type=None) -> List[Instance]:
     return sorted_meta
 
 
-def clean_structure(expression: str) -> str:
-    """
-    Parses an instance value, removes duplicate children from AND/OR nodes,
-    and returns the cleaned string.
-    """
-    try:
-        def _prune(node):
-            if not node.children:
-                return
-            for child in node.children:
-                _prune(child)
-            
-            if node.label in ["AND", "OR"]:
-                unique = []
-                seen = set()
-                for child in node.children:
-                    s = str(child)
-                    if s not in seen:
-                        seen.add(s)
-                        unique.append(child)
-                node.children = unique
-
-        root = parse_sexpr(expression)
-        _prune(root)
-        return str(root)
-    except Exception as e:
-        return expression
-
-
 def run_variation(deme, fitness, hyperparams, target, min_xover_neighbors=5):
     bg = BetaFactorGraph()
     
@@ -105,7 +76,7 @@ def run_variation(deme, fitness, hyperparams, target, min_xover_neighbors=5):
         if len(deme.instances) >= min_xover_neighbors:
             raw_children = crossTopOne(selected_exemplars, stv_dict, target)
             for inst in raw_children:
-                inst.value = clean_structure(inst.value)
+                inst.value = prune_duplicate_children(inst.value)
                 if inst.value not in existing_values:
                     new_candidates.append(inst)
                     existing_values.add(inst.value)
@@ -117,7 +88,7 @@ def run_variation(deme, fitness, hyperparams, target, min_xover_neighbors=5):
 
         child1 = mutation.execute_additive()
         if isinstance(child1, Instance):
-            child1.value = clean_structure(child1.value)
+            child1.value = prune_duplicate_children(child1.value)
             if child1.value not in existing_values:
                 child1.score = fitness.get_fitness(child1)
                 new_candidates.append(child1)
@@ -125,7 +96,7 @@ def run_variation(deme, fitness, hyperparams, target, min_xover_neighbors=5):
 
         child2 = mutation.execute_multiplicative()
         if isinstance(child2, Instance):
-            child2.value = clean_structure(child2.value)
+            child2.value = prune_duplicate_children(child2.value)
             if child2.value not in existing_values:
                 child2.score = fitness.get_fitness(child2)
                 new_candidates.append(child2)
