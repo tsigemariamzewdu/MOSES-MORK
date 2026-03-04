@@ -518,34 +518,34 @@ python scripts/run_tests.py
 ### 15.1 Overall system flow (main.py → strategy)
 ```mermaid
 flowchart TD
-  A[Start: main.py] --> B[Load CSV truth table]
-  B --> C[Build knobs list]
-  C --> D[Create exemplar Instance e.g. (AND)]
-  D --> E[FitnessOracle scores exemplar]
-  E --> F{fg_type?}
+  A["Start: main.py"] --> B["Load CSV truth table"]
+  B --> C["Build knobs list"]
+  C --> D["Create exemplar Instance (e.g., AND)"]
+  D --> E["FitnessOracle scores exemplar"]
+  E --> F{"fg_type?"}
 
-  F -->|alpha| G[run_abp_moses]
-  F -->|beta| H[run_bp_moses]
+  F -->|alpha| G["run_abp_moses"]
+  F -->|beta| H["run_bp_moses"]
   F -->|other| G
 
-  G --> I[Finalize metapop]
-  H --> I[Finalize metapop]
-  I --> J[Print top instances]
-  J --> K[End]
+  G --> I["Finalize metapop"]
+  H --> I["Finalize metapop"]
+  I --> J["Print top instances"]
+  J --> K["End"]
 ```
 
 ### 15.2 Alpha path (ABP MOSES + EDA per deme)
 ```mermaid
 flowchart TD
-  A[run_abp_moses(exemplar, metapop, max_iter)] --> B{max_iter <= 0?}
-  B -->|yes| Z[Return final metapop]
+  A["run_abp_moses entry"] --> B{"max_iter <= 0"}
+  B -->|yes| Z["return metapop"]
 
-  B -->|no| C[Sample demes from truth table]
-  C --> D[For each deme: run_deme_eda]
-  D --> E[Collect best instance per deme]
-  E --> F[Merge into metapop (dedupe by value)]
-  F --> G[Pick new exemplar (stagnation check)]
-  G --> H[Recurse with max_iter-1]
+  B -->|no| C["sample demes from truth table"]
+  C --> D["for each deme: run_deme_eda"]
+  D --> E["collect best instance per deme"]
+  E --> F["merge into metapop (dedupe by value)"]
+  F --> G["pick new exemplar (stagnation handling)"]
+  G --> H["recurse with max_iter minus 1"]
 ```
 
 ### 15.3 Beta path (BP-guided variation inside deme)
