@@ -5,8 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from Representation.representation import (Quantale, Instance,
                                            Deme, Hyperparams,
-                                           knobs_from_truth_table,
-                                           FitnessOracle)
+                                           knobs_from_truth_table)
 from Representation.csv_parser import load_truth_table
 from Representation.sampling import sample_from_TTable
 from Representation.helpers import tokenize, get_top_level_features
@@ -150,7 +149,6 @@ def crossTopOne(instances: List[Instance], stv_dict: Dict[str, Tuple[float, floa
     rest_population = sorted_instances[1:]
     
     children = []
-    fitness = FitnessOracle(target_vals)
     print(f"\nTop Parent Selected for Crossover: {top_parent.value} | Score: {top_parent.score}")
     # 2. Crossover Top One with everyone else
     for spouse in rest_population:
@@ -159,7 +157,6 @@ def crossTopOne(instances: List[Instance], stv_dict: Dict[str, Tuple[float, floa
         
         # Generates a single child
         child = vq.execute_crossover()
-        child.score = fitness.get_fitness(child)
         
         children.append(child)
 

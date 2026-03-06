@@ -3,7 +3,7 @@ import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
-from Representation.helpers import TreeNode, parse_sexpr, tokenize, isOP
+from Representation.helpers import TreeNode, parse_sexpr, tokenize, isOP, prune_duplicate_children
 from Representation.representation import (Instance, Knob,
                                            Deme, Hyperparams,
                                            FitnessOracle,
@@ -18,28 +18,6 @@ from typing import List, Dict
 from copy import deepcopy
 import random
 from collections import deque
-
-def prune_duplicates(node: TreeNode):
-    """
-    Recursively removes duplicate children from AND/OR nodes.
-    """
-    if not node.children:
-        return
-
-    for child in node.children:
-        prune_duplicates(child)
-
-    # If this node is commutative (AND / OR), remove duplicate children
-    if node.label in ["AND", "OR"]:
-        unique_children = []
-        seen = set()
-        for child in node.children:
-            s = str(child)
-            if s not in seen:
-                seen.add(s)
-                unique_children.append(child)
-        node.children = unique_children
-
 
 def sample_logical_perms(current_op: str, variables: List[Knob]) -> List[str]:
     """
@@ -164,7 +142,7 @@ def randomBernoulli(hyperparams: Hyperparams, instance: Instance,
             if random.random() > hyperparams.bernoulli_prob: # usage check
                  mutant_root.children.append(TreeNode(symbol))
         
-        prune_duplicates(mutant_root)
+        prune_duplicate_children(mutant_root)
         new_inst.value = str(mutant_root)
         for t in tokens:
                 if isOP(t) or t in ['(', ')']:
@@ -215,7 +193,7 @@ def randomBernoulli(hyperparams: Hyperparams, instance: Instance,
                         append_target.children.append(TreeNode(symbol))
                         knob_idx += 1
 
-            prune_duplicates(mutant_root)
+            prune_duplicate_children(mutant_root)
             mutant_value = str(mutant_root)
             if mutant_value == instanceExp:
                 continue

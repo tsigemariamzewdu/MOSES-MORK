@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 import re
 
 
@@ -87,6 +87,46 @@ def exclude_one_symbol(expr:str , symbol_to_remove:str)->str:
 
 def isOP(token: str) -> bool:
     return token in ['AND', 'OR', 'NOT']
+
+
+def prune_duplicate_children(expr_or_node: Union[str, TreeNode]) -> Union[str, TreeNode]:
+    """
+    Removes duplicate children from commutative AND/OR nodes.
+
+    Accepts either:
+    - a TreeNode (mutates in place and returns the same node), or
+    - an s-expression string (returns the cleaned string).
+    """
+    def _prune_node(node: TreeNode) -> None:
+        if not node.children:
+            return
+
+        for child in node.children:
+            _prune_node(child)
+
+        if node.label in ["AND", "OR"]:
+            unique_children = []
+            seen = set()
+            for child in node.children:
+                child_repr = str(child)
+                if child_repr not in seen:
+                    seen.add(child_repr)
+                    unique_children.append(child)
+            node.children = unique_children
+
+    if isinstance(expr_or_node, TreeNode):
+        _prune_node(expr_or_node)
+        return expr_or_node
+
+    if isinstance(expr_or_node, str):
+        try:
+            root = parse_sexpr(tokenize(expr_or_node))
+            _prune_node(root)
+            return str(root)
+        except Exception:
+            return expr_or_node
+
+    return expr_or_node
 
 def get_top_level_features(s_expr_str):
     """
