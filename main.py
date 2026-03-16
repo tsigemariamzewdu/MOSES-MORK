@@ -16,7 +16,7 @@ import datetime
 
 def run_moses(exemplar: Instance, fitness: FitnessOracle, hyperparams: Hyperparams, 
               knobs: List[Knob], target: List[bool], csv_path: str, 
-              metapop: List[Instance], max_iter: 100, fg_type: str = "alpha") -> List[Instance]:
+              metapop: List[Instance], max_iter: int = 100, fg_type: str = "alpha") -> List[Instance]:
     """
     Unified entry point for running MOSES optimization.
     
@@ -32,9 +32,6 @@ def run_moses(exemplar: Instance, fitness: FitnessOracle, hyperparams: Hyperpara
     
     Returns: Final metapopulation of instances after evolution.
     """
-    
-    max_iter = hyperparams.max_iter if max_iter is None else max_iter
-    fg_type = hyperparams.fg_type if fg_type is None else fg_type
 
     print(f"Starting MOSES Run with Strategy: {fg_type.upper()}")
     
@@ -203,9 +200,9 @@ def main():
         knobs=knobs,
         target=target, 
         csv_path=csv_path, 
-
         metapop=metapop,
-
+        max_iter=hyperparams.max_iter,
+        fg_type=hyperparams.fg_type,
     )
     
     
