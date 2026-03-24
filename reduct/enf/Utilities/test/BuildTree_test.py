@@ -48,5 +48,29 @@ class TestBuildTree(unittest.TestCase):
         
         self.assertTrue(self.compare_trees(result, expected_tree))
 
+    def testCase04_wrapped_empty_or_is_removed(self):
+        input_str = "&(C,|(A,&(B,|)))"
+        result = BuildTree(input_str)
+
+        expected_tree = BinaryExpressionTreeNode("AND")
+        expected_tree.left = BinaryExpressionTreeNode("C")
+        expected_tree.right = BinaryExpressionTreeNode("OR")
+        expected_tree.right.left = BinaryExpressionTreeNode("A")
+        expected_tree.right.right = BinaryExpressionTreeNode("B")
+
+        self.assertTrue(self.compare_trees(result, expected_tree))
+
+    def testCase05_unwrapped_or_is_removed(self):
+        input_str = "&(C,|(A,&(B,OR)))"
+        result = BuildTree(input_str)
+
+        expected_tree = BinaryExpressionTreeNode("AND")
+        expected_tree.left = BinaryExpressionTreeNode("C")
+        expected_tree.right = BinaryExpressionTreeNode("OR")
+        expected_tree.right.left = BinaryExpressionTreeNode("A")
+        expected_tree.right.right = BinaryExpressionTreeNode("B")
+
+        self.assertTrue(self.compare_trees(result, expected_tree))
+
 if __name__ == '__main__':
     unittest.main()

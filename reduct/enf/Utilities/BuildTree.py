@@ -23,6 +23,17 @@ def BuildTree(input: str) -> BinaryExpressionTreeNode | None:
         If the input format is invalid or there are insufficient arguments for a binary operator.
     """
     input = re.sub(r"\s+", "", input)
+    if not input:
+        return None
+
+    # Drop empty bare operator tokens.
+    if input in {"|", "&"}:
+        return None
+
+    # Drop  standalone operators that may leak from upstream expression generation.
+    if input.upper() in {"OR", "AND"}:
+        return None
+
     tree = BinaryExpressionTreeNode("Null")
     first = input[0]
     
@@ -38,17 +49,28 @@ def BuildTree(input: str) -> BinaryExpressionTreeNode | None:
             tree.type = NodeType.AND if first == "&" else NodeType.OR
             tree.left = BuildTree(firstArg)
             tree.right = BuildTree(secondArg)
+
+            # Prune empty children and collapse unary leftovers.
+            if tree.left is None and tree.right is None:
+                return None
+            if tree.left is None:
+                return tree.right
+            if tree.right is None:
+                return tree.left
+
             return tree
         case "!":
             input = input[2 : len(input) - 1]
             tree.value = "NOT"
             tree.type = NodeType.NOT
             tree.right = BuildTree(input)
+            if tree.right is None:
+                return None
             return tree
         case "(" | ")":
             raise ValueError("Invalid Boolean expression format")
         case _:
-            tree.value = first
+            tree.value = input
             tree.type = NodeType.LITERAL
             return tree
 
